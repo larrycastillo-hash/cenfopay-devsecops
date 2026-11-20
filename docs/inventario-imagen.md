@@ -2,17 +2,23 @@
 
 ## 1. Inventario (SBOM)
 - Archivo: `reportes/sbom-cyclonedx.json` · Componentes totales: **512** (foto del antes: `reportes/antes/sbom-cyclonedx.json`)
-- Imagen base: `python:3.9` (imagen completa) · Digest: **no fijado** (se usa solo la etiqueta `python:3.9`, que puede cambiar sin aviso; se fija por digest en el paso 6.4)
-- Sistema operativo y versión: **Debian 13.1** · Paquetes del SO: **478** · Librerías Python: **33** (+1 componente que describe el sistema operativo)
+- Imagen base (antes): `python:3.9` (imagen completa) · Digest: **no fijado** (solo la etiqueta, que puede cambiar sin aviso)
+- Imagen base (después): `python:3.9-slim-bookworm@sha256:a02e9c5406c416c504d6c9a1a306ff4080c3173f1008d192f953bd20382a2d5c` (etapa de construcción: `python:3.9-bookworm@sha256:ff12c273af1e1814efcd8dfdefe16a70a4d901afe94dce721ffed8a34176f285`)
+- Sistema operativo y versión: antes **Debian 13.1** → después **Debian 12.15 (bookworm, slim)** · Paquetes del SO: **478** · Librerías Python: **33** (+1 componente que describe el sistema operativo)
 
 ## 2. Clasificación (antes / después del endurecimiento)
 | Origen | Severidad | Antes | Después | Con corrección | Sin corrección | En CISA KEV |
 |--------|-----------|------:|--------:|---------------:|---------------:|------------:|
-| SO (trivy-so) | CRITICAL | 235 | | 224 | 11 | 1 |
-| SO (trivy-so) | HIGH | 2603 | | 2206 | 397 | 4 |
-| Dependencias (trivy-dependencias) | CRITICAL | 1 | | 1 | 0 | 0 |
-| Dependencias (trivy-dependencias) | HIGH | 16 | | 16 | 0 | 0 |
-| Configuración (trivy-config / hadolint) | ALTA | 5 (trivy-config: 2 CRITICAL + 3 HIGH) · hadolint: 2 error | | — | — | — |
+| SO (trivy-so) | CRITICAL | 235 | **2** | 224 → **0** | 11 → 2 | 1 |
+| SO (trivy-so) | HIGH | 2603 | **99** | 2206 → **0** | 397 → 99 | 4 |
+| Dependencias (trivy-dependencias) | CRITICAL | 1 | **1** | 1 → 1 | 0 → 0 | 0 |
+| Dependencias (trivy-dependencias) | HIGH | 16 | **18** | 16 → 18 | 0 → 0 | 0 |
+| Configuración (trivy-config / hadolint) | ALTA | 5 (trivy-config: 2 CRITICAL + 3 HIGH) · hadolint: 2 error | 0 (compuerta del PR #3: hadolint y trivy-config sin hallazgos que bloqueen) | — | — | — |
+
+**Notas del «después»** (Trivy sobre `cenfopay:local` y compuerta del PR #3, 19/11/2026):
+- Sistema operativo: de 235 CRITICAL y 2603 HIGH a **2 y 99**, y **ninguna con corrección pendiente**: todas las fallas con arreglo se resolvieron con la base slim y `apt-get upgrade`. Las que quedan no tienen arreglo publicado (`solo_con_correccion: true`: no detienen el cambio y se vigilan cada semana).
+- Librerías: suben de 16 a 18 HIGH porque la versión protegida agrega `gunicorn` y las piezas de instalación (`wheel`, `jaraco.context`) traen sus propias fallas. Todas tienen corrección y se atienden en la semana 3, cuando las librerías pasan a detener el cambio.
+- Hallazgos totales normalizados de la compuerta: de 14 035 (foto del antes) a **445** (≈ 97 % menos).
 
 **Notas del «antes»:**
 - Las columnas «Con corrección», «Sin corrección» y «En CISA KEV» corresponden a la imagen original (antes).
@@ -90,6 +96,6 @@ Salida de `bash scripts/verificar-endurecimiento.sh cenfopay:local cenfopay-app-
 
 | ID | Hallazgo | Análisis (verificado) | Decisión |
 |----|----------|------------------------|----------|
-| END-02 | Variable `GPG_KEY` | **Falso positivo.** `docker image inspect` muestra `GPG_KEY=E3FF2839C048B25C084DEBE9B26995E310250568`: es la huella de la llave **pública** OpenPGP del gestor de versiones de Python (Łukasz Langa), que la imagen oficial usa para verificar la firma del código fuente de Python. No es un secreto. El script la marca porque su regla busca cualquier variable cuyo nombre contenga `KEY` (`(PASSWORD\|SECRET\|TOKEN\|KEY)`). | Documentar como falso positivo. Si la compuerta la bloquea (END-02 es de gravedad ALTA), registrar una excepción con motivo, responsable y vencimiento. |
+| END-02 | Variable `GPG_KEY` | **Falso positivo.** `docker image inspect` muestra `GPG_KEY=E3FF2839C048B25C084DEBE9B26995E310250568`: es la huella de la llave **pública** OpenPGP del gestor de versiones de Python (Łukasz Langa), que la imagen oficial usa para verificar la firma del código fuente de Python. No es un secreto. El script la marca porque su regla busca cualquier variable cuyo nombre contenga `KEY` (`(PASSWORD\|SECRET\|TOKEN\|KEY)`). | La compuerta del PR #3 la bloqueó («endurecimiento ALTA: 1 > 0»). Se registró como **excepción** `falso_positivo` en `security/politica-umbrales.yml`, con justificación, responsable (Larry Castillo) y vencimiento (31/12/2026). |
 | END-04 | 312 MB (meta ≤ 250 MB) | Mejora de ≈ 70 % frente a la imagen completa (≈ 1 GB). `docker history` muestra las capas propias: parches del SO (`apt-get upgrade`) **59.5 MB** y librerías de Python (`/opt/venv`) **43.3 MB**; el resto es la imagen base slim. | Riesgo aceptado (gravedad MEDIA) hasta la semana 3: la base nueva (Python 3.13) necesita menos parches. |
 | END-05 | `apt-get` presente | **Hallazgo real:** la imagen slim conserva el gestor de paquetes. La marca `__sin_shell__` es un efecto del script: su lista de herramientas termina en `gcc`, que no existe en la imagen, y ese último fallo activa el mensaje `__sin_shell__` aunque la imagen sí tiene shell. | Riesgo bajo, documentado. Se elimina con una imagen sin gestor de paquetes (por ejemplo, distroless) cuando la app use una versión de Python compatible. |

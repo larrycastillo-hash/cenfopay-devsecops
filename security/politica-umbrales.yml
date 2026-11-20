@@ -57,7 +57,17 @@ herramientas:
   #     ALTA: 0
 
 # Excepciones (aceptación formal de un riesgo). Todas vencen: obligan a revisarlas.
-excepciones: []
+excepciones:
+  - herramienta: endurecimiento
+    id: END-02
+    tipo: falso_positivo
+    justificacion: >-
+      La variable GPG_KEY de la imagen oficial de Python es la huella de la llave
+      PUBLICA OpenPGP del gestor de versiones de Python (E3FF2839...10250568),
+      usada para verificar la firma del codigo fuente de Python. No es un secreto.
+      El script la marca solo porque su nombre contiene KEY. Revisado en la semana 2.
+    responsable: "Larry Castillo"
+    vence: 2026-12-31
 #  - herramienta: trivy-dependencias
 #    id: CVE-2026-00000
 #    tipo: riesgo_aceptado                # o falso_positivo
