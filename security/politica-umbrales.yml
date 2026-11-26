@@ -22,7 +22,7 @@ modo: bloquear           # cambiado por scripts (ver historial de git)
 herramientas:
   semgrep:               # SAST · gravedades: ERROR, WARNING, INFO
     umbrales:
-      ERROR: 5           # límite de tolerancia: hallazgos ERROR de hoy
+      ERROR: 0           # semana 3: código corregido → el límite de tolerancia baja a 0
   zap:                   # DAST · riesgos: High, Medium, Low, Informational
     umbrales:
       High: 0
@@ -42,13 +42,15 @@ herramientas:
       HIGH: 0
   trivy-dependencias:  # semana 2 = solo reporta · semana 3 = detiene
     solo_con_correccion: true
-    umbrales: {}
+    umbrales:              # semana 3: las librerías se actualizaron → ahora detiene
+      CRITICAL: 0
+      HIGH: 0
   endurecimiento:      # semana 2 · scripts/verificar-endurecimiento.sh
     umbrales:
       ALTA: 0
-  # bandit:              # semana 3 · HIGH, MEDIUM, LOW
-  #   umbrales:
-  #     HIGH: 0
+  bandit:              # semana 3 · HIGH, MEDIUM, LOW
+    umbrales:
+      HIGH: 0
   # gitleaks:            # semana 4 · toda contraseña encontrada es SECRETO
   #   umbrales:
   #     SECRETO: 0
