@@ -15,8 +15,10 @@
 | 7 | `7f98ccdb1da06cc1` | Bandit | B108 (`/tmp`) | `config.py:26` (hoy `:28`) | MEDIA | **FP** | `/tmp/cenfopay.db` es solo el valor por defecto de la base de datos de pruebas; la ruta real llega por la variable de entorno `SQLITE_PATH`. Un atacante no controla ese dato. | Silenciado con `# nosec B108` con su motivo en `config.py`. | Larry Castillo | 26/11/2026 |
 | 8 | `ae7b29afa644087f` (-1, -2) · `3a9c31bb89babd15` (-1) | Semgrep / Bandit | cenfopay-secreto-embebido · B105 | `config.py:10, 13, 25` | MEDIA / BAJA | **RA** | Es real (CWE-798): `SECRET_KEY`, `TOKEN_TIPO_CAMBIO` y `DB_PASSWORD` están escritos en el código. Se acepta hasta la semana 4: son valores ficticios del laboratorio y no detienen la compuerta (WARNING / LOW). La prueba `test_secret_key_se_inyecta_desde_el_entorno` falla a propósito como recordatorio. | Se corrige en la semana 4 (secretos inyectados desde el entorno / Vault). El código los marca con `# VULN (CWE-798)`. Vence: 31/12/2026. | Larry Castillo | 26/11/2026 |
 | 9 | — (semana 2) | Endurecimiento | END-02 | Imagen de Python (`GPG_KEY`) | ALTA | **FP** | `GPG_KEY` es la huella de la llave PÚBLICA con la que Python firma su código; el script la marca solo porque el nombre contiene «KEY». | Excepción en `security/politica-umbrales.yml` con motivo, responsable y vencimiento 31/12/2026. | Larry Castillo | 26/11/2026 |
+| 10 | — (PR #5, corrida #15) | Trivy (dependencias) | CVE-2026-114613 · GHSA-6v7p-g79w-8964 (msgpack) · CVE-2025-47273 (setuptools) · CVE-2026-97687 · CVE-2026-97689 (urllib3) | Imagen final: copias internas de **pip** (`/usr/local` y `/opt/venv`) | ALTA | **VP** | Reales y con arreglo publicado; detuvieron la compuerta («trivy-dependencias HIGH: 5 > 0»). No los usa la app: son librerías empaquetadas dentro de pip, que solo sirve para construir la imagen. Las librerías de la app (`/opt/venv`) estaban en 0. | Corregido de raíz: se desinstaló pip de la imagen final (`app/Dockerfile`), lo que además reduce la superficie de ataque. Trivy local: 0; corrida #16 en verde. | Larry Castillo | 26/11/2026 |
+| 11 | `01becae49feaa30f` `e848b5611090f838` | Gitleaks | generic-api-key | `docs/inventario-imagen.md:93` y `:99` (commits `d8dbe86e`, `47cc6c7a`) | CRITICA | **FP** | La cadena marcada es `E3FF2839…10250568`, la huella de la llave PÚBLICA de Python que se citó al justificar END-02. Gitleaks la confunde con una llave secreta por ser larga y aleatoria. No da acceso a nada. | Gitleaks se activa en la semana 4: se registrará allí como excepción (huellas permitidas) con este motivo. No detiene la compuerta hoy. | Larry Castillo | 26/11/2026 |
 
-**Resumen:** 9 avisos revisados · 5 VP (corregidos y comprobados con pruebas) · 2 FP · 2 RA (una fila de RA agrupa los 5 avisos de secretos de `config.py`).
+**Resumen:** 11 filas revisadas · 6 VP (corregidos y comprobados) · 3 FP · 2 RA (una fila de RA agrupa los 5 avisos de secretos de `config.py`; la fila 10 agrupa 5 CVE de pip).
 
 **Nota:** la guía (7.3 y 7.5) menciona la falsa alarma `useless-inner-function` como excepción en la política. En este repositorio `semana.sh 3` no la registró, y Semgrep (`p/python`) sobre el código corregido da **0 hallazgos**: no aparece, por lo que no se registró una excepción innecesaria.
 
@@ -52,3 +54,13 @@ Revisión del código **antes de las correcciones** (rama `semana-3`, 25/11/2026
 3. **Ninguna basta por sí sola**: juntas señalan 15 lugares distintos del código. Por eso, desde la semana 3, el pipeline ejecuta ambas.
 4. En la línea 44 las reglas propias dan el contexto correcto: no es solo HTML armado a mano (WARNING), sino inyección de plantillas (ERROR), que puede ejecutar código en el servidor.
 5. Los valores de `config.py` (líneas 10, 13 y 25) son datos de prueba del curso; se tratan en la semana 4 (gestión de secretos).
+
+## Comparativo antes → después (semana 3, paso 7.7)
+
+`docs/comparativo.md` (generado con `bash scripts/comparar.sh`): **14 035 → 243 hallazgos** (−13 792, ≈ 98 %).
+
+| Lista | Total | Por herramienta | Explicación |
+|---|---|---|---|
+| **Corregidos** | 13 842 | trivy-so 13 744 · trivy-dependencias 49 · semgrep 16 · hadolint 9 · bandit 8 · trivy-config 7 · zap 6 · endurecimiento 3 | Imagen slim + parches (semana 2) y código corregido (semana 3). Endurecimiento incluye END-04: la imagen pasó de 312 MB a 226 MB (meta 250 MB). |
+| **Nuevos** | 50 | trivy-so 47 · gitleaks 2 · zap 1 | No son regresiones del código. trivy-so: CVE propios de Debian 13 *trixie* (la nueva base de Python 3.13) **sin arreglo publicado**; no detienen la compuerta (`solo_con_correccion`). gitleaks: falso positivo de la fila 11. zap: aviso informativo nuevo, dentro del umbral (Medium ≤ 3). |
+| **Persistentes** | 193 | trivy-so 175 · gitleaks 6 · zap 5 · semgrep 3 · bandit 2 · endurecimiento 2 | trivy-so: sin arreglo publicado (riesgo residual, vigilado por la corrida semanal). gitleaks 6, semgrep 3 y bandit 2: secretos en el historial y en `config.py` → **semana 4** (fila 8). endurecimiento 2: END-02 (FP, excepción) y END-05 (`apt-get`, riesgo residual aceptado en el Lab 2). zap 5: avisos Medium/Bajo/Info dentro del umbral. |
