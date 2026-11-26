@@ -39,6 +39,11 @@ COPY --from=construccion /opt/venv /opt/venv
 COPY --chown=root:root --chmod=0755 cenfopay/ ./cenfopay/
 COPY --chown=root:root --chmod=0644 run.py ./
 
+# Lab 3: pip solo se usa para construir la imagen; se elimina de la imagen final.
+# Sus librerias internas (msgpack, setuptools) tenian CVE HIGH con arreglo.
+RUN /usr/local/bin/python -m pip uninstall -y pip \
+ && /opt/venv/bin/python -m pip uninstall -y pip
+
 USER 10001:10001
 EXPOSE 8000
 
